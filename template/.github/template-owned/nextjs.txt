@@ -1,0 +1,14 @@
+# Files owned by house-template-nextjs. A pull request that changes one gets a CI warning
+# (tools/check_template_owned.py): improve the template first, or label it template-candidate.
+# The product's own code in frontend/src is the project's, except these files.
+.node-version
+mk/nextjs.mk
+.claude/rules/nextjs.md
+.github/template-owned/nextjs.txt
+frontend/.gitignore
+frontend/.npmrc
+frontend/eslint.config.mjs
+frontend/next.config.ts
+frontend/tsconfig.json
+frontend/vitest.config.ts
+frontend/vitest.setup.ts

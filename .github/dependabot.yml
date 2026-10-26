@@ -1,0 +1,48 @@
+# Updates for this repository's workflows and test dependencies, and for the frontend the layer
+# generates (template/frontend is a plain pnpm project, so Dependabot can update it in place).
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      test-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /template/frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    # Generated projects get these as feat/fix changes through template updates.
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
