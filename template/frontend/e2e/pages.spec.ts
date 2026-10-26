@@ -2,7 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // Every page of the product, so each is checked for accessibility, CSP violations and errors in
-// light, dark and mobile. Add each new page here (with real ids for dynamic routes).
+// light, dark and mobile, and compared with its screenshot. Add each new page here (with real ids
+// for dynamic routes), then make its screenshots with `make screenshots-frontend`.
 const PAGES = ["/", "/a-page-that-does-not-exist"];
 
 // WCAG 2.2 A and AA, as axe tags them.
@@ -24,6 +25,10 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+function screenshotName(path: string) {
+  return path === "/" ? "home" : path.slice(1).replaceAll("/", "-");
+}
+
 for (const path of PAGES) {
   test(`${path} is accessible and runs within its CSP`, async ({ page }) => {
     const errors: string[] = [];
@@ -39,5 +44,7 @@ for (const path of PAGES) {
     expect(await page.evaluate(() => window.cspViolations)).toEqual([]);
     expect(errors).toEqual([]);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    // Compared only in Playwright's Linux image (see playwright.config.ts).
+    await expect(page).toHaveScreenshot(`${screenshotName(path)}.png`, { fullPage: true });
   });
 }

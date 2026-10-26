@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import re
+import subprocess
 
 import pytest
 import yaml
@@ -92,12 +94,66 @@ def test_every_template_owned_entry_matches_a_file(render, project, backend):
         assert any(fnmatch.fnmatch(f, entry) for f in files), entry
 
 
-def test_check_runs_the_end_to_end_tests_after_the_build(render):
-    mk = (render() / "mk" / "nextjs.mk").read_text()
-    check = mk.split("check-nextjs:")[1].split("\n\n")[0]
-    assert check.index("$(FRONTEND) build") < check.index("$(FRONTEND) e2e")
-    # CI (GitHub sets CI=true) also installs the browser's system libraries.
-    assert "playwright install --only-shell $(if $(CI),--with-deps) chromium" in mk
+def make_dry_run(project, target, **variables):
+    """The commands `make` would run for one of the layer's targets, with CI unset unless given."""
+    env = {k: v for k, v in os.environ.items() if k not in {"CI", "E2E_DOCKER"}}
+    args = [f"{name}={value}" for name, value in variables.items()]
+    return subprocess.run(
+        ["make", "-n", "-f", "mk/nextjs.mk", target, *args],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+
+def test_locally_the_end_to_end_tests_use_an_installed_chromium_after_the_build(render):
+    project = render()
+    assert "pnpm --dir frontend exec playwright install --only-shell chromium" in make_dry_run(
+        project, "install-nextjs"
+    )
+    check = make_dry_run(project, "check-nextjs")
+    assert check.index("pnpm --dir frontend build") < check.index("pnpm --dir frontend e2e")
+
+
+@pytest.mark.parametrize("variables", [{"CI": "true"}, {"E2E_DOCKER": "1"}])
+def test_ci_runs_the_end_to_end_tests_in_playwrights_image_with_no_chromium_here(
+    render, variables
+):
+    project = render()
+    install = make_dry_run(project, "install-nextjs", **variables)
+    assert not any("playwright install" in line for line in install)
+    check = make_dry_run(project, "check-nextjs", **variables)
+    assert check.index("pnpm --dir frontend build") < check.index("pnpm --dir frontend e2e:docker")
+
+
+def test_screenshots_are_remade_only_in_playwrights_image(render):
+    lines = make_dry_run(render(), "screenshots-frontend")
+    assert lines[-1] == "pnpm --dir frontend e2e:docker --update-snapshots=changed"
+
+
+def test_the_docker_script_is_executable_and_runs_the_installed_playwright_version(render):
+    script = render() / "frontend" / "scripts" / "e2e-docker.sh"
+    assert os.access(script, os.X_OK)
+    text = script.read_text()
+    assert 'mcr.microsoft.com/playwright:v${version}-noble' in text
+    assert '"playwright@${version}" run-server' in text
+
+
+def test_every_page_has_a_screenshot_in_every_project(render):
+    frontend = render() / "frontend"
+    spec = (frontend / "e2e" / "pages.spec.ts").read_text()
+    pages = json.loads(re.search(r"const PAGES = (\[.*?\]);", spec).group(1))
+    projects = re.findall(r'name: "(\w+)"', (frontend / "playwright.config.ts").read_text())
+    assert projects == ["light", "dark", "mobile"]
+    expected = {
+        f"{'home' if page == '/' else page[1:].replace('/', '-')}-{name}.png"
+        for page in pages
+        for name in projects
+    }
+    shots = frontend / "e2e" / "screenshots" / "pages.spec.ts"
+    assert {path.name for path in shots.iterdir()} == expected
 
 
 def test_rules_file_loads_only_for_frontend_paths(render):
@@ -173,10 +229,10 @@ def test_no_backend_means_no_proxy_types_or_sign_in_hook(render, project):
     assert not (dst / "frontend/src/lib/api").exists()
     mk = (dst / "mk/nextjs.mk").read_text()
     assert "api-types" not in mk
-    assert mk.endswith("$(FRONTEND) e2e\n")
+    assert mk.endswith("$(FRONTEND) e2e:docker --update-snapshots=changed\n")
     rules = (dst / ".claude/rules/nextjs.md").read_text()
     assert "backendCredentials" not in rules
-    assert rules.endswith("`make e2e-frontend` alone.\n")
+    assert rules.endswith("Never make them any other way.\n")
 
 
 def test_the_api_types_belong_to_the_project_after_the_first_copy():
