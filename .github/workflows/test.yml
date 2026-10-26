@@ -100,6 +100,19 @@ jobs:
         working-directory: ${{ runner.temp }}/demo
         run: git status --porcelain && test -z "$(git status --porcelain)"
 
+      # next dev rewrites frontend/AGENTS.md's managed block when it sees a coding agent (CLAUDECODE
+      # is how it detects Claude Code) and the committed block isn't current.
+      - name: A coding agent running next dev leaves the tree clean
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          CLAUDECODE: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          pnpm --dir frontend exec next dev --port 3002 > "$RUNNER_TEMP/dev.log" 2>&1 &
+          for _ in $(seq 60); do curl -fs -o /dev/null http://127.0.0.1:3002/ && break; sleep 1; done
+          curl -fs -o /dev/null http://127.0.0.1:3002/
+          git status --porcelain && test -z "$(git status --porcelain)"
+
       # From frontend/compose.yaml alone: base 0.2.2 has no root compose file for a project
       # without the FastAPI layer.
       - name: The image runs as a non-root user and answers its liveness check

@@ -20,7 +20,7 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 |---|---|
 | `frontend/` | Next.js 16 App Router under `src/`, React 19, standalone output, Cache Components on; strict TypeScript 5.9; ESLint (`core-web-vitals`, `typescript`) and Prettier; Vitest with Testing Library |
 | `frontend/src/styles/tokens.css` | Neutral design tokens (light and dark) with semantic names, mapped into Tailwind v4; every text colour is tested for WCAG AA contrast on every background |
-| `frontend/AGENTS.md` | Next.js's managed block pointing coding agents at the version-matched docs in `node_modules/next/dist/docs/`, committed so `next dev` never dirties the tree |
+| `frontend/AGENTS.md`, `frontend/CLAUDE.md` | Next.js's managed block pointing coding agents at the version-matched docs in `node_modules/next/dist/docs/`, committed so `next dev` never dirties the tree (CI runs it as Claude Code to check); `CLAUDE.md` imports it, since Claude Code reads that file. Agent feedback (`experimental.agentFeedback`) is off |
 | `frontend/package.json`, `.npmrc`, `pnpm-workspace.yaml` | pnpm 12 on Node 26, exact versions, install scripts allowed one by one |
 | `frontend/src/proxy.ts`, `src/lib/csp.ts`, `next.config.ts` | Security headers on every response (nosniff, frame-deny, no-referrer, COOP, Permissions-Policy, HSTS in production) and a Content Security Policy per request: prerendered pages allow only this origin's scripts (inline ones included, since they're built before any request), and paths listed in `NONCE_PATHS` get a per-request nonce with `'strict-dynamic'` |
 | `frontend/src/app/{not-found,error,global-error}.tsx` | Error pages that never show an error's message, only the digest the server logged it under |
@@ -36,7 +36,7 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 
 With no backend, the proxy, clients and sign-in hook are left out.
 
-Still to come, through reviewed pull requests: the agent setup and releases.
+Still to come: releases.
 
 ## Develop the template
 

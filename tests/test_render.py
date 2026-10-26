@@ -170,6 +170,12 @@ def test_agents_file_holds_nextjs_managed_block():
     assert agents.rstrip().endswith("<!-- END:nextjs-agent-rules -->")
 
 
+def test_claude_code_reads_the_frontends_agents_file():
+    # Claude Code loads CLAUDE.md, not AGENTS.md, from a directory it works in; base's root
+    # CLAUDE.md does the same for the root AGENTS.md.
+    assert (TEMPLATE / "frontend/CLAUDE.md").read_text() == "@AGENTS.md\n"
+
+
 def test_no_local_build_output_or_secrets_are_ever_copied(render):
     secret = TEMPLATE / "frontend" / ".env"
     created = not secret.exists()

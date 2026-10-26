@@ -29,3 +29,11 @@ describe("the security headers", () => {
     expect((await headersFor("/", "development")).get("strict-transport-security")).toBeNull();
   });
 });
+
+describe("the coding-agent settings", () => {
+  it("keep the docs block in AGENTS.md and leave agent feedback off", async () => {
+    const { default: nextConfig } = await import("./next.config");
+    expect(nextConfig.agentRules).not.toBe(false);
+    expect(nextConfig.experimental?.agentFeedback).toBe(false);
+  });
+});

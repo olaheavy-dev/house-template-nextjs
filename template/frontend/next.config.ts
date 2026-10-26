@@ -27,6 +27,10 @@ const nextConfig: NextConfig = {
   // Next.js 16's caching model: pages are static unless they read request data or opt out.
   cacheComponents: true,
   partialPrefetching: true,
+  // agentRules (on by default) keeps the AGENTS.md block that points coding agents at the docs in
+  // node_modules/next/dist/docs/. Agent feedback, which has agents draft issue reports for
+  // Next.js, stays off: create-next-app turns it on, so say so explicitly.
+  experimental: { agentFeedback: false },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
