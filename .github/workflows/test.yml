@@ -169,11 +169,13 @@ jobs:
           wait_for http://127.0.0.1:8000/health/live
 
           # The production server, as the image runs it: health passes, and nobody is signed in.
-          (cd frontend/.next/standalone && API_BASE_URL=http://127.0.0.1:8000 DEV_USER=ignored \
-            PORT=3000 HOSTNAME=127.0.0.1 node server.js > "$RUNNER_TEMP/web.log" 2>&1 &)
+          # (server.js changes to its own directory; Next renames the process, so stop it by pid.)
+          API_BASE_URL=http://127.0.0.1:8000 DEV_USER=ignored PORT=3000 HOSTNAME=127.0.0.1 \
+            node frontend/.next/standalone/server.js > "$RUNNER_TEMP/web.log" 2>&1 &
+          web=$!
           wait_for http://127.0.0.1:3000/api/health/live
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)" = 401
-          pkill -f "node server.js"
+          kill "$web"
 
           # Development: DEV_USER stands in for a signed-in user.
           API_BASE_URL=http://127.0.0.1:8000 DEV_USER=ci-user \
