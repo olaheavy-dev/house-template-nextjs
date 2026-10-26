@@ -92,6 +92,14 @@ def test_every_template_owned_entry_matches_a_file(render, project, backend):
         assert any(fnmatch.fnmatch(f, entry) for f in files), entry
 
 
+def test_check_runs_the_end_to_end_tests_after_the_build(render):
+    mk = (render() / "mk" / "nextjs.mk").read_text()
+    check = mk.split("check-nextjs:")[1].split("\n\n")[0]
+    assert check.index("$(FRONTEND) build") < check.index("$(FRONTEND) e2e")
+    # CI (GitHub sets CI=true) also installs the browser's system libraries.
+    assert "playwright install --only-shell $(if $(CI),--with-deps) chromium" in mk
+
+
 def test_rules_file_loads_only_for_frontend_paths(render):
     rules = (render() / ".claude/rules/nextjs.md").read_text()
     front = yaml.safe_load(rules.split("---")[1])
@@ -165,10 +173,10 @@ def test_no_backend_means_no_proxy_types_or_sign_in_hook(render, project):
     assert not (dst / "frontend/src/lib/api").exists()
     mk = (dst / "mk/nextjs.mk").read_text()
     assert "api-types" not in mk
-    assert mk.endswith("$(FRONTEND) build\n")
+    assert mk.endswith("$(FRONTEND) e2e\n")
     rules = (dst / ".claude/rules/nextjs.md").read_text()
     assert "backendCredentials" not in rules
-    assert rules.endswith("plain environment variables.\n")
+    assert rules.endswith("`make e2e-frontend` alone.\n")
 
 
 def test_the_api_types_belong_to_the_project_after_the_first_copy():

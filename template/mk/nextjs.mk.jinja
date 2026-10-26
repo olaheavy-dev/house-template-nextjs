@@ -8,17 +8,19 @@ INSTALLS += install-nextjs
 CHECKS += check-nextjs{% if backend == 'fastapi' %} check-api-types{% endif %}
 FAST_CHECKS += check-fast-nextjs
 
-.PHONY: install-nextjs check-nextjs check-fast-nextjs lock-frontend dev-frontend test-frontend build-frontend{% if backend != 'none' %} api-types{% endif %}{% if backend == 'fastapi' %} check-api-types{% endif %}
+.PHONY: install-nextjs check-nextjs check-fast-nextjs lock-frontend dev-frontend test-frontend build-frontend e2e-frontend{% if backend != 'none' %} api-types{% endif %}{% if backend == 'fastapi' %} check-api-types{% endif %}
 
-install-nextjs: ## Install the frontend's dependencies (from frontend/pnpm-lock.yaml; needs Node 26 and pnpm 12)
+install-nextjs: ## Install the frontend's dependencies (from frontend/pnpm-lock.yaml; needs Node 26 and pnpm 12) and Playwright's Chromium
 	$(FRONTEND) install --frozen-lockfile
+	$(FRONTEND) exec playwright install --only-shell $(if $(CI),--with-deps) chromium
 
-check-nextjs: ## Frontend: lint, format, types, unit tests and a production build
+check-nextjs: ## Frontend: lint, format, types, unit tests, a production build and the end-to-end tests against it
 	$(FRONTEND) lint
 	$(FRONTEND) format:check
 	$(FRONTEND) typecheck
 	$(FRONTEND) test
 	$(FRONTEND) build
+	$(FRONTEND) e2e
 
 check-fast-nextjs: ## Frontend: lint and types (the pre-push and stop-hook checks)
 	$(FRONTEND) lint
@@ -35,6 +37,9 @@ test-frontend: ## Run the frontend's unit tests
 
 build-frontend: ## Build the frontend for production (the standalone server)
 	$(FRONTEND) build
+
+e2e-frontend: build-frontend ## Run the end-to-end tests (Playwright, axe) against a fresh production build
+	$(FRONTEND) e2e
 {%- if backend == 'fastapi' %}
 
 API_TYPES := src/lib/api/schema.d.ts
