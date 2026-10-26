@@ -29,12 +29,20 @@ _exclude:
   - .env
   - .env.*
   - "!.env.example"
+  # With no backend, nothing to proxy, type or sign in to. (The API types are named per backend.)
+  - "{% if backend == 'none' %}frontend/src/app/api{% endif %}"
+  - "{% if backend == 'none' %}frontend/src/lib/api{% endif %}"
+  - "{% if backend == 'none' %}frontend/src/lib/auth.ts{% endif %}"
+  - "{% if backend == 'none' %}frontend/src/lib/auth.test.ts{% endif %}"
+  - "{% if backend == 'none' %}frontend/.env.example{% endif %}"
 _external_data:
   base: .copier-answers.base.yml
 # The project owns its lockfile after the first copy: a template update changes package.json,
-# and `make lock-frontend` brings the lockfile in line.
+# and `make lock-frontend` brings the lockfile in line. The API types follow the project's own
+# API from then on (`make api-types`).
 _skip_if_exists:
   - frontend/pnpm-lock.yaml
+  - frontend/src/lib/api/schema.d.ts
 _message_after_copy: |
   The Next.js layer is in frontend/. Next:
     1. make install && make check   (needs Node 26 and pnpm 12)

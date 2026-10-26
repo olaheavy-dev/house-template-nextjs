@@ -15,6 +15,9 @@ env:
   # The base layer the generated project starts from. Keep tests/conftest.py's BASE_ANSWERS in step
   # (a test checks it) when moving to a newer house-template-base release.
   BASE_VERSION: v0.2.2
+  # The FastAPI layer the full-stack job adds. The committed API types are generated from it, so
+  # moving to a newer release may need `make api-types` and a commit of the result.
+  FASTAPI_VERSION: v0.6.0
 
 jobs:
   template:
@@ -39,11 +42,15 @@ jobs:
         run: uv run --frozen pytest
 
   generated-project:
-    name: Generated project passes its checks
+    name: Generated project passes its checks (backend ${{ matrix.backend }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [none, openapi]
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,6 +78,7 @@ jobs:
       - name: Render house-template-base, then this layer
         env:
           DEMO: ${{ runner.temp }}/demo
+          BACKEND: ${{ matrix.backend }}
         run: |
           uv run --frozen copier copy --trust --defaults --vcs-ref "$BASE_VERSION" \
             -d project_name="Demo App" -d 'stacks=["nextjs"]' \
@@ -78,7 +86,7 @@ jobs:
           git -C "$DEMO" init -q -b main
           git -C "$DEMO" add -A
           git -C "$DEMO" -c user.email=ci@example.com -c user.name=ci commit -q -m "chore: start from house-template-base"
-          uv run --frozen copier copy --trust --defaults --vcs-ref HEAD . "$DEMO"
+          uv run --frozen copier copy --trust --defaults --vcs-ref HEAD -d backend="$BACKEND" . "$DEMO"
           git -C "$DEMO" add -A
           git -C "$DEMO" -c user.email=ci@example.com -c user.name=ci commit -q -m "chore: add the nextjs layer"
 
@@ -91,3 +99,88 @@ jobs:
       - name: The checks leave the tree clean
         working-directory: ${{ runner.temp }}/demo
         run: git status --porcelain && test -z "$(git status --porcelain)"
+
+  with-fastapi:
+    name: Full stack with the FastAPI layer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: template/.node-version
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: template/frontend/package.json
+
+      - name: Render house-template-base, the FastAPI layer, then this layer
+        env:
+          DEMO: ${{ runner.temp }}/demo
+        run: |
+          commit() {
+            git -C "$DEMO" add -A
+            git -C "$DEMO" -c user.email=ci@example.com -c user.name=ci commit -q -m "$1"
+          }
+          uv run --frozen copier copy --trust --defaults --vcs-ref "$BASE_VERSION" \
+            -d project_name="Demo App" -d 'stacks=["fastapi", "nextjs"]' \
+            https://github.com/olaheavy-dev/house-template-base.git "$DEMO"
+          git -C "$DEMO" init -q -b main
+          commit "chore: start from house-template-base"
+          uv run --frozen copier copy --trust --defaults --vcs-ref "$FASTAPI_VERSION" \
+            https://github.com/olaheavy-dev/house-template-fastapi.git "$DEMO"
+          commit "chore: add the fastapi layer"
+          uv run --frozen copier copy --trust --defaults --vcs-ref HEAD . "$DEMO"
+          commit "chore: add the nextjs layer"
+
+      # Includes check-api-types: the committed types match the FastAPI layer's API.
+      - name: Run the project's make check
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: make install && make check
+
+      - name: The checks leave the tree clean
+        working-directory: ${{ runner.temp }}/demo
+        run: git status --porcelain && test -z "$(git status --porcelain)"
+
+      - name: The browser reaches the backend through the frontend's /api proxy
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          wait_for() { for _ in $(seq 60); do curl -fs -o /dev/null "$1" && return; sleep 1; done; return 1; }
+          uv --directory backend run --frozen uvicorn app.main:app --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          wait_for http://127.0.0.1:8000/health/live
+
+          # The production server, as the image runs it: health passes, and nobody is signed in.
+          (cd frontend/.next/standalone && API_BASE_URL=http://127.0.0.1:8000 DEV_USER=ignored \
+            PORT=3000 HOSTNAME=127.0.0.1 node server.js > "$RUNNER_TEMP/web.log" 2>&1 &)
+          wait_for http://127.0.0.1:3000/api/health/live
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)" = 401
+          pkill -f "node server.js"
+
+          # Development: DEV_USER stands in for a signed-in user.
+          API_BASE_URL=http://127.0.0.1:8000 DEV_USER=ci-user \
+            pnpm --dir frontend exec next dev --port 3001 > "$RUNNER_TEMP/dev.log" 2>&1 &
+          wait_for http://127.0.0.1:3001/api/health/live
+          test "$(curl -fsS http://127.0.0.1:3001/api/v1/me)" = '{"id":"ci-user"}'
+
+      - name: Show the servers' logs
+        if: failure()
+        run: tail -n 50 "$RUNNER_TEMP"/*.log
