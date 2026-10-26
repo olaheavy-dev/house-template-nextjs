@@ -14,7 +14,7 @@ concurrency:
 env:
   # The base layer the generated project starts from. Keep tests/conftest.py's BASE_ANSWERS in step
   # (a test checks it) when moving to a newer house-template-base release.
-  BASE_VERSION: v0.2.2
+  BASE_VERSION: v0.3.0
   # The FastAPI layer the full-stack job adds. The committed API types are generated from it, so
   # moving to a newer release may need `make api-types` and a commit of the result.
   FASTAPI_VERSION: v0.6.0
@@ -113,20 +113,18 @@ jobs:
           curl -fs -o /dev/null http://127.0.0.1:3002/
           git status --porcelain && test -z "$(git status --porcelain)"
 
-      # From frontend/compose.yaml alone: base 0.2.2 has no root compose file for a project
-      # without the FastAPI layer.
       - name: The image runs as a non-root user and answers its liveness check
         working-directory: ${{ runner.temp }}/demo
         env:
           BACKEND: ${{ matrix.backend }}
         run: |
-          docker compose -f frontend/compose.yaml up -d --build --wait web
+          make up-frontend
           test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok"}'
-          test "$(docker compose -f frontend/compose.yaml exec -T web id -u)" = 10001
+          test "$(docker compose exec -T web id -u)" = 10001
           # The proxy reads API_BASE_URL at request time; unset, it answers 503 (404 with no backend).
           status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)
           test "$status" = "$([ "$BACKEND" = none ] && echo 404 || echo 503)"
-          docker compose -f frontend/compose.yaml down
+          docker compose down
 
   with-fastapi:
     name: Full stack with the FastAPI layer
@@ -210,12 +208,6 @@ jobs:
             pnpm --dir frontend exec next dev --port 3001 > "$RUNNER_TEMP/dev.log" 2>&1 &
           wait_for http://127.0.0.1:3001/api/health/live
           test "$(curl -fsS http://127.0.0.1:3001/api/v1/me)" = '{"id":"ci-user"}'
-
-      # house-template-base 0.2.2's root compose.yaml predates frontend/compose.yaml; the next base
-      # release includes it. Remove this line when BASE_VERSION moves past 0.2.2.
-      - name: Include the frontend's compose file from the root one
-        working-directory: ${{ runner.temp }}/demo
-        run: printf '  - frontend/compose.yaml\n' >> compose.yaml && docker compose config --quiet
 
       - name: The whole stack runs from its images, and the browser reaches the API through the proxy
         working-directory: ${{ runner.temp }}/demo
