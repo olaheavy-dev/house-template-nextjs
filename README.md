@@ -28,13 +28,15 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 | `frontend/scripts/e2e-docker.sh`, `frontend/e2e/screenshots/` | The same tests against Chromium in Playwright's Linux image (`mcr.microsoft.com/playwright`, the version of the installed `@playwright/test`), the only place screenshots are compared, so they match on every machine. CI runs this way, which also skips installing Chromium's system libraries; locally `E2E_DOCKER=1`, and `make screenshots-frontend` remakes the ones that changed |
 | `frontend/src/app/api/[...path]/route.ts`, `src/lib/api/` | The backend connection: a same-origin `/api/*` proxy to `API_BASE_URL` (read per request, so one build runs anywhere; streams bodies, passes only a short list of headers, never the browser's cookies or Authorization), and typed `openapi-fetch` clients for the browser (`api`, through the proxy) and the server (`serverApi()`, direct). Types come from the backend's OpenAPI schema with `make api-types`; with FastAPI, `make check` fails while they are behind |
 | `frontend/src/lib/auth.ts` | `backendCredentials`, the sign-in hook a project replaces with its provider: it turns the frontend's session into the headers the backend checks. It fails closed; `DEV_USER` stands in for a user in development through the FastAPI layer's `X-Dev-User` |
-| `mk/nextjs.mk` | `install-nextjs`, `check-nextjs`, `check-fast-nextjs`, `lock-frontend`, `dev-frontend`, `test-frontend`, `build-frontend`, `e2e-frontend`, `screenshots-frontend` and `api-types`, joined to the base targets |
+| `frontend/Dockerfile`, `.dockerignore`, `compose.yaml` | The web image: the standalone server on `node:26-trixie-slim` (pinned by digest), as a non-root user, with every setting read at request time. `/health/live` is its liveness check. The Compose service is included by the root `compose.yaml` (house-template-base 0.2.3 or later), and with the FastAPI layer it starts the API and calls it inside Compose's network |
+| `.github/workflows/publish-web.yml` | With `container_images`, every push to main that touches `frontend/` publishes `ghcr.io/<owner>/<project>-web` through base's `publish-image.yml` (provenance and SBOM attested) |
+| `mk/nextjs.mk` | `install-nextjs`, `check-nextjs`, `check-fast-nextjs`, `lock-frontend`, `dev-frontend`, `test-frontend`, `build-frontend`, `e2e-frontend`, `screenshots-frontend`, `image-frontend`, `up-frontend` and `api-types`, joined to the base targets |
 | `.claude/rules/nextjs.md` | Frontend rules for coding agents, loaded only when they touch `frontend/` |
 | `.node-version` | The frontend's Node (26) |
 
 With no backend, the proxy, clients and sign-in hook are left out.
 
-Still to come, through reviewed pull requests: the container image and Compose service, and releases.
+Still to come, through reviewed pull requests: the agent setup and releases.
 
 ## Develop the template
 

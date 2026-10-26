@@ -12,7 +12,7 @@ INSTALLS += install-nextjs
 CHECKS += check-nextjs{% if backend == 'fastapi' %} check-api-types{% endif %}
 FAST_CHECKS += check-fast-nextjs
 
-.PHONY: install-nextjs check-nextjs check-fast-nextjs lock-frontend dev-frontend test-frontend build-frontend e2e-frontend screenshots-frontend{% if backend != 'none' %} api-types{% endif %}{% if backend == 'fastapi' %} check-api-types{% endif %}
+.PHONY: install-nextjs check-nextjs check-fast-nextjs lock-frontend dev-frontend test-frontend build-frontend e2e-frontend screenshots-frontend image-frontend up-frontend{% if backend != 'none' %} api-types{% endif %}{% if backend == 'fastapi' %} check-api-types{% endif %}
 
 install-nextjs: ## Install the frontend's dependencies (from frontend/pnpm-lock.yaml; needs Node 26 and pnpm 12) and, without E2E_DOCKER, Playwright's Chromium
 	$(FRONTEND) install --frozen-lockfile
@@ -44,6 +44,12 @@ build-frontend: ## Build the frontend for production (the standalone server)
 
 e2e-frontend: build-frontend ## Run the end-to-end tests (Playwright, axe) against a fresh production build; E2E_DOCKER=1 adds the screenshots
 	$(E2E)
+
+image-frontend: ## Build the web image from frontend/Dockerfile
+	docker compose build web
+
+up-frontend: ## Run the frontend from its image on http://127.0.0.1:3000{% if backend == 'fastapi' %}, with the backend's services{% endif %}
+	docker compose up -d --build --wait web
 
 screenshots-frontend: build-frontend ## Remake the screenshots that changed (frontend/e2e/screenshots/) in Playwright's Linux image, then review and commit them
 	$(FRONTEND) e2e:docker --update-snapshots=changed

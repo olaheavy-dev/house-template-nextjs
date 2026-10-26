@@ -100,6 +100,21 @@ jobs:
         working-directory: ${{ runner.temp }}/demo
         run: git status --porcelain && test -z "$(git status --porcelain)"
 
+      # From frontend/compose.yaml alone: base 0.2.2 has no root compose file for a project
+      # without the FastAPI layer.
+      - name: The image runs as a non-root user and answers its liveness check
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          docker compose -f frontend/compose.yaml up -d --build --wait web
+          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok"}'
+          test "$(docker compose -f frontend/compose.yaml exec -T web id -u)" = 10001
+          # The proxy reads API_BASE_URL at request time; unset, it answers 503 (404 with no backend).
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)
+          test "$status" = "$([ "$BACKEND" = none ] && echo 404 || echo 503)"
+          docker compose -f frontend/compose.yaml down
+
   with-fastapi:
     name: Full stack with the FastAPI layer
     runs-on: ubuntu-24.04
@@ -183,6 +198,27 @@ jobs:
           wait_for http://127.0.0.1:3001/api/health/live
           test "$(curl -fsS http://127.0.0.1:3001/api/v1/me)" = '{"id":"ci-user"}'
 
+      # house-template-base 0.2.2's root compose.yaml predates frontend/compose.yaml; the next base
+      # release includes it. Remove this line when BASE_VERSION moves past 0.2.2.
+      - name: Include the frontend's compose file from the root one
+        working-directory: ${{ runner.temp }}/demo
+        run: printf '  - frontend/compose.yaml\n' >> compose.yaml && docker compose config --quiet
+
+      - name: The whole stack runs from its images, and the browser reaches the API through the proxy
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          API_PORT: "8100" # the step above leaves its API on 8000
+        run: |
+          make up-frontend
+          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok"}'
+          curl -fsS -o /dev/null http://127.0.0.1:3000/api/health/live
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)" = 401
+          test "$(docker compose exec -T web id -u)" = 10001
+          docker compose down -v
+
       - name: Show the servers' logs
         if: failure()
-        run: tail -n 50 "$RUNNER_TEMP"/*.log
+        working-directory: ${{ runner.temp }}/demo
+        run: |
+          tail -n 50 "$RUNNER_TEMP"/*.log || true
+          docker compose logs --tail 50 || true

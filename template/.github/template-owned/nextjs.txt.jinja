@@ -16,8 +16,15 @@ frontend/next.config.test.ts
 frontend/playwright.config.ts
 frontend/e2e/headers.spec.ts
 frontend/scripts/e2e-docker.sh
+frontend/Dockerfile
+frontend/.dockerignore
+frontend/compose.yaml
+frontend/src/app/health/live/route.ts
 frontend/src/proxy.ts
 frontend/src/proxy.test.ts
+{%- if _external_data.base.container_images %}
+.github/workflows/publish-web.yml
+{%- endif %}
 {%- if backend != 'none' %}
 # fnmatch globs: [[] is a literal [.
 frontend/src/app/api/[[]...path]/route.ts
