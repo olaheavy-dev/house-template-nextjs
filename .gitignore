@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+node_modules/
+.next/
+# Local keys: never committed, never copied.
+.env
+.env.*
+!.env.example

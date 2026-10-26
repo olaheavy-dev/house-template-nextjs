@@ -1,0 +1,58 @@
+# house-template-nextjs: the Next.js frontend layer. Apply it after house-template-base, in the
+# same project, with its own answers file:
+#   copier copy --trust -a .copier-answers.nextjs.yml gh:olaheavy-dev/house-template-nextjs .
+# It owns frontend/, mk/nextjs.mk, .node-version and its rules file, and reads the base answers
+# (project name, slug, stacks) through _external_data instead of asking again.
+# Copier docs: https://copier.readthedocs.io/en/stable/configuring/
+
+_min_copier_version: "9.19.0"
+_subdirectory: template
+_answers_file: .copier-answers.nextjs.yml
+_templates_suffix: .jinja
+_envops:
+  keep_trailing_newline: true
+  undefined: jinja2.StrictUndefined
+# Copier's defaults plus what a local run of the frontend's checks leaves in template/frontend.
+_exclude:
+  - copier.yml
+  - "~*"
+  - .git
+  - .DS_Store
+  - node_modules
+  - .next
+  - coverage
+  - test-results
+  - playwright-report
+  - "*.tsbuildinfo"
+  - next-env.d.ts
+  # A developer's keys in template/frontend/.env must never reach a generated project.
+  - .env
+  - .env.*
+  - "!.env.example"
+_external_data:
+  base: .copier-answers.base.yml
+# The project owns its lockfile after the first copy: a template update changes package.json,
+# and `make lock-frontend` brings the lockfile in line.
+_skip_if_exists:
+  - frontend/pnpm-lock.yaml
+_message_after_copy: |
+  The Next.js layer is in frontend/. Next:
+    1. make install && make check   (needs Node 26 and pnpm 12)
+    2. git add -A && git commit -m "chore: add the house-template-nextjs layer"
+
+backend:
+  type: str
+  help: >-
+    Which backend the frontend talks to: the FastAPI layer, any other API with an OpenAPI schema
+    (an ASP.NET Core API, an external service), or none
+  choices:
+    FastAPI (house-template-fastapi): fastapi
+    Another API with an OpenAPI schema: openapi
+    No backend: none
+  default: "{{ 'fastapi' if _external_data.base and 'fastapi' in _external_data.base.stacks else 'none' }}"
+  validator: >-
+    {% if not _external_data.base %}Apply house-template-base first: .copier-answers.base.yml is missing
+    {%- elif 'nextjs' not in _external_data.base.stacks %}The base answers don't list the nextjs stack: run
+    copier update -a .copier-answers.base.yml and add it, so CI, CodeQL and Dependabot cover the frontend
+    {%- elif backend == 'fastapi' and 'fastapi' not in _external_data.base.stacks %}The fastapi backend
+    needs the fastapi stack in the base answers{% endif %}
