@@ -12,3 +12,11 @@ frontend/next.config.ts
 frontend/tsconfig.json
 frontend/vitest.config.ts
 frontend/vitest.setup.ts
+{%- if backend != 'none' %}
+# fnmatch globs: [[] is a literal [.
+frontend/src/app/api/[[]...path]/route.ts
+frontend/src/lib/api/proxy.ts
+frontend/src/lib/api/proxy.test.ts
+frontend/src/lib/api/browser.ts
+frontend/src/lib/api/server.ts
+{%- endif %}

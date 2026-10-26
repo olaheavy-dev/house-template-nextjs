@@ -22,12 +22,16 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 | `frontend/src/styles/tokens.css` | Neutral design tokens (light and dark) with semantic names, mapped into Tailwind v4; every text colour is tested for WCAG AA contrast on every background |
 | `frontend/AGENTS.md` | Next.js's managed block pointing coding agents at the version-matched docs in `node_modules/next/dist/docs/`, committed so `next dev` never dirties the tree |
 | `frontend/package.json`, `.npmrc`, `pnpm-workspace.yaml` | pnpm 12 on Node 26, exact versions, install scripts allowed one by one |
-| `mk/nextjs.mk` | `install-nextjs`, `check-nextjs`, `check-fast-nextjs`, `lock-frontend`, `dev-frontend`, `test-frontend`, `build-frontend`, joined to the base targets |
+| `frontend/src/app/api/[...path]/route.ts`, `src/lib/api/` | The backend connection: a same-origin `/api/*` proxy to `API_BASE_URL` (read per request, so one build runs anywhere; streams bodies, passes only a short list of headers, never the browser's cookies or Authorization), and typed `openapi-fetch` clients for the browser (`api`, through the proxy) and the server (`serverApi()`, direct). Types come from the backend's OpenAPI schema with `make api-types`; with FastAPI, `make check` fails while they are behind |
+| `frontend/src/lib/auth.ts` | `backendCredentials`, the sign-in hook a project replaces with its provider: it turns the frontend's session into the headers the backend checks. It fails closed; `DEV_USER` stands in for a user in development through the FastAPI layer's `X-Dev-User` |
+| `mk/nextjs.mk` | `install-nextjs`, `check-nextjs`, `check-fast-nextjs`, `lock-frontend`, `dev-frontend`, `test-frontend`, `build-frontend` and `api-types`, joined to the base targets |
 | `.claude/rules/nextjs.md` | Frontend rules for coding agents, loaded only when they touch `frontend/` |
 | `.node-version` | The frontend's Node (26) |
 
-Still to come, through reviewed pull requests: the backend connection (same-origin rewrites and generated API types), security headers and Playwright with axe checks, the container image and Compose service, and releases.
+With no backend, the proxy, clients and sign-in hook are left out.
+
+Still to come, through reviewed pull requests: security headers and Playwright with axe checks, the container image and Compose service, and releases.
 
 ## Develop the template
 
-`uv run pytest` renders the layer and checks it, including the tokens' contrast. CI also generates a real project from house-template-base plus this layer and runs its `make check` on Node 26. After changing `template/frontend/package.json`, regenerate the lockfile with pnpm 12 on Node 26 (`pnpm --dir template/frontend install --lockfile-only`).
+`uv run pytest` renders the layer and checks it, including the tokens' contrast. CI also generates real projects and runs their `make check` on Node 26: base plus this layer with no backend and with an OpenAPI one, and base plus the FastAPI layer plus this layer, where it also calls the backend through the frontend's proxy in production and development. After a new FastAPI layer release, regenerate the starter API types from it (`make api-types` in a generated project, then copy `frontend/src/lib/api/schema.d.ts` to the fastapi-named file in `template/frontend/src/lib/api/`). After changing `template/frontend/package.json`, regenerate the lockfile with pnpm 12 on Node 26 (`pnpm --dir template/frontend install --lockfile-only`).

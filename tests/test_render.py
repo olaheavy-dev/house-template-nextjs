@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 
@@ -79,13 +80,16 @@ def test_mk_file_adds_its_targets_to_the_base_aggregates(render):
     assert not {"dev", "test", "lock", "build"} & set(targets)
 
 
-def test_every_template_owned_entry_exists(render):
-    project = render()
-    lines = (project / ".github/template-owned/nextjs.txt").read_text().splitlines()
+@pytest.mark.parametrize("backend", ["fastapi", "openapi", "none"])
+def test_every_template_owned_entry_matches_a_file(render, project, backend):
+    # The base's check reads each line as an fnmatch glob.
+    dst = render(project(stacks=["fastapi", "nextjs"]), backend=backend)
+    lines = (dst / ".github/template-owned/nextjs.txt").read_text().splitlines()
     entries = [line for line in lines if line and not line.startswith("#")]
+    files = [p.relative_to(dst).as_posix() for p in dst.rglob("*") if p.is_file()]
     assert entries
     for entry in entries:
-        assert (project / entry).exists(), entry
+        assert any(fnmatch.fnmatch(f, entry) for f in files), entry
 
 
 def test_rules_file_loads_only_for_frontend_paths(render):
@@ -120,6 +124,65 @@ def test_base_answers_fixture_matches_the_pinned_base_version():
     workflow = (TEMPLATE.parent / ".github/workflows/test.yml").read_text()
     assert f"BASE_VERSION: {BASE_ANSWERS['_commit']}" in workflow
 
+
+
+# --- The backend connection, per backend choice ----------------------------------------------
+
+API_FILES = ("frontend/src/app/api/[...path]/route.ts", "frontend/src/lib/api/proxy.ts",
+             "frontend/src/lib/api/server.ts", "frontend/src/lib/api/browser.ts",
+             "frontend/src/lib/api/schema.d.ts", "frontend/src/lib/auth.ts",
+             "frontend/.env.example")
+
+
+def test_fastapi_gets_the_proxy_types_from_its_api_and_a_staleness_check(render):
+    project = render()
+    for path in API_FILES:
+        assert (project / path).is_file(), path
+    assert '"/v1/me"' in (project / "frontend/src/lib/api/schema.d.ts").read_text()
+    mk = (project / "mk/nextjs.mk").read_text()
+    assert "CHECKS += check-nextjs check-api-types" in mk
+    assert "app.main import create_app" in mk
+    assert "make api-types" in (project / ".claude/rules/nextjs.md").read_text()
+
+
+def test_another_openapi_backend_starts_with_empty_types_and_a_schema_argument(render, project):
+    dst = render(project(stacks=["nextjs", "dotnet"]), backend="openapi")
+    for path in API_FILES:
+        assert (dst / path).is_file(), path
+    schema = (dst / "frontend/src/lib/api/schema.d.ts").read_text()
+    assert "export type paths = Record<string, never>;" in schema
+    mk = (dst / "mk/nextjs.mk").read_text()
+    assert "API_SCHEMA ?=" in mk
+    assert "check-api-types" not in mk
+    assert "app.main" not in mk
+    assert "API_SCHEMA=" in (dst / ".claude/rules/nextjs.md").read_text()
+
+
+def test_no_backend_means_no_proxy_types_or_sign_in_hook(render, project):
+    dst = render(project(stacks=["nextjs"]), backend="none")
+    for path in API_FILES:
+        assert not (dst / path).exists(), path
+    assert not (dst / "frontend/src/lib/api").exists()
+    mk = (dst / "mk/nextjs.mk").read_text()
+    assert "api-types" not in mk
+    assert mk.endswith("$(FRONTEND) build\n")
+    rules = (dst / ".claude/rules/nextjs.md").read_text()
+    assert "backendCredentials" not in rules
+    assert rules.endswith("plain environment variables.\n")
+
+
+def test_the_api_types_belong_to_the_project_after_the_first_copy():
+    config = yaml.safe_load((TEMPLATE.parent / "copier.yml").read_text())
+    assert "frontend/src/lib/api/schema.d.ts" in config["_skip_if_exists"]
+
+
+def test_the_env_example_is_committed_and_holds_no_public_variables(render):
+    project = render()
+    ignore = (project / "frontend/.gitignore").read_text().splitlines()
+    assert ignore.index("!.env.example") > ignore.index(".env*")
+    example = (project / "frontend/.env.example").read_text()
+    assert "API_BASE_URL=" in example
+    assert not [line for line in example.splitlines() if line.startswith("NEXT_PUBLIC_")]
 
 # --- Tokens: WCAG contrast for the starter palette, light and dark ---------------------------
 
