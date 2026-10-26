@@ -232,7 +232,7 @@ def test_no_backend_means_no_proxy_types_or_sign_in_hook(render, project):
     assert mk.endswith("$(FRONTEND) e2e:docker --update-snapshots=changed\n")
     rules = (dst / ".claude/rules/nextjs.md").read_text()
     assert "backendCredentials" not in rules
-    assert rules.endswith("Never make them any other way.\n")
+    assert rules.endswith("never a tag.\n")
 
 
 def test_the_api_types_belong_to_the_project_after_the_first_copy():
@@ -299,3 +299,70 @@ def test_interactive_edges_and_buttons_are_readable(mode):
     assert contrast(colours["text-inverse"], colours["accent-primary"]) >= 4.5
     assert contrast(colours["text-inverse"], colours["accent-primary-hover"]) >= 4.5
     assert contrast(colours["text-inverse"], colours["bg-inverse"]) >= 4.5
+
+
+def web_service(dst):
+    return yaml.safe_load((dst / "frontend" / "compose.yaml").read_text())["services"]["web"]
+
+
+def test_the_image_runs_the_node_major_the_project_pins(render):
+    dst = render()
+    major = (dst / ".node-version").read_text().strip()
+    dockerfile = (dst / "frontend" / "Dockerfile").read_text()
+    images = re.findall(r"^FROM (node:\S+)", dockerfile, re.MULTILINE)
+    assert images and all(
+        re.fullmatch(rf"node:{major}\.\d+\.\d+-trixie-slim@sha256:[0-9a-f]{{64}}", image)
+        for image in images
+    ), images
+
+
+def test_the_image_runs_the_standalone_server_as_a_non_root_user(render):
+    dockerfile = (render() / "frontend" / "Dockerfile").read_text()
+    assert "USER 10001:10001" in dockerfile
+    assert 'CMD ["node", "server.js"]' in dockerfile
+    # pnpm comes from package.json's packageManager, so the two never drift.
+    assert "require(\"./package.json\").packageManager" in dockerfile
+
+
+def test_secrets_and_local_builds_stay_out_of_the_image(render):
+    ignored = (render() / "frontend" / ".dockerignore").read_text().splitlines()
+    for entry in [".env", ".env.*", "node_modules/", ".next/"]:
+        assert entry in ignored
+
+
+def test_the_web_service_calls_the_fastapi_layer_inside_compose(render):
+    web = web_service(render())
+    assert web["environment"]["API_BASE_URL"] == "http://api:8000"
+    assert web["depends_on"] == {"api": {"condition": "service_healthy"}}
+    assert web["ports"] == ["127.0.0.1:${WEB_PORT:-3000}:3000"]
+    assert "http://127.0.0.1:3000/health/live" in web["healthcheck"]["test"][-1]
+
+
+def test_the_web_service_reaches_another_api_on_this_machine(render, project):
+    web = web_service(render(project(stacks=["nextjs"]), backend="openapi"))
+    assert web["environment"]["API_BASE_URL"] == "${API_BASE_URL:-}"
+    assert web["extra_hosts"] == ["host.docker.internal:host-gateway"]
+    assert "depends_on" not in web
+
+
+def test_the_web_service_needs_nothing_without_a_backend(render, project):
+    web = web_service(render(project(stacks=["nextjs"]), backend="none"))
+    assert "API_BASE_URL" not in web["environment"]
+    assert "depends_on" not in web
+
+
+def test_the_healthcheck_path_is_a_route(render):
+    assert (render() / "frontend/src/app/health/live/route.ts").exists()
+
+
+@pytest.mark.parametrize("container_images", [True, False])
+def test_the_web_image_is_published_only_with_container_images(render, project, container_images):
+    dst = render(project(container_images=container_images))
+    workflow = dst / ".github/workflows/publish-web.yml"
+    owned = (dst / ".github/template-owned/nextjs.txt").read_text().splitlines()
+    assert workflow.exists() == container_images
+    assert (".github/workflows/publish-web.yml" in owned) == container_images
+    if container_images:
+        job = yaml.safe_load(workflow.read_text())["jobs"]["web"]
+        assert job["uses"] == "./.github/workflows/publish-image.yml"
+        assert job["with"] == {"image": "web", "context": "frontend"}
