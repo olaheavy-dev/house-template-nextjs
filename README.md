@@ -20,7 +20,7 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 |---|---|
 | `frontend/` | Next.js 16 App Router under `src/`, React 19, standalone output, Cache Components on; strict TypeScript 5.9; ESLint (`core-web-vitals`, `typescript`) and Prettier; Vitest with Testing Library |
 | `frontend/src/styles/tokens.css` | Neutral design tokens (light and dark) with semantic names, mapped into Tailwind v4; every text colour is tested for WCAG AA contrast on every background |
-| `frontend/AGENTS.md` | Next.js's managed block pointing coding agents at the version-matched docs in `node_modules/next/dist/docs/`, committed so `next dev` never dirties the tree |
+| `frontend/AGENTS.md`, `frontend/CLAUDE.md` | Next.js's managed block pointing coding agents at the version-matched docs in `node_modules/next/dist/docs/`, committed so `next dev` never dirties the tree (CI runs it as Claude Code to check); `CLAUDE.md` imports it, since Claude Code reads that file. Agent feedback (`experimental.agentFeedback`) is off |
 | `frontend/package.json`, `.npmrc`, `pnpm-workspace.yaml` | pnpm 12 on Node 26, exact versions, install scripts allowed one by one |
 | `frontend/src/proxy.ts`, `src/lib/csp.ts`, `next.config.ts` | Security headers on every response (nosniff, frame-deny, no-referrer, COOP, Permissions-Policy, HSTS in production) and a Content Security Policy per request: prerendered pages allow only this origin's scripts (inline ones included, since they're built before any request), and paths listed in `NONCE_PATHS` get a per-request nonce with `'strict-dynamic'` |
 | `frontend/src/app/{not-found,error,global-error}.tsx` | Error pages that never show an error's message, only the digest the server logged it under |
@@ -28,7 +28,7 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 | `frontend/scripts/e2e-docker.sh`, `frontend/e2e/screenshots/` | The same tests against Chromium in Playwright's Linux image (`mcr.microsoft.com/playwright`, the version of the installed `@playwright/test`), the only place screenshots are compared, so they match on every machine. CI runs this way, which also skips installing Chromium's system libraries; locally `E2E_DOCKER=1`, and `make screenshots-frontend` remakes the ones that changed |
 | `frontend/src/app/api/[...path]/route.ts`, `src/lib/api/` | The backend connection: a same-origin `/api/*` proxy to `API_BASE_URL` (read per request, so one build runs anywhere; streams bodies, passes only a short list of headers, never the browser's cookies or Authorization), and typed `openapi-fetch` clients for the browser (`api`, through the proxy) and the server (`serverApi()`, direct). Types come from the backend's OpenAPI schema with `make api-types`; with FastAPI, `make check` fails while they are behind |
 | `frontend/src/lib/auth.ts` | `backendCredentials`, the sign-in hook a project replaces with its provider: it turns the frontend's session into the headers the backend checks. It fails closed; `DEV_USER` stands in for a user in development through the FastAPI layer's `X-Dev-User` |
-| `frontend/Dockerfile`, `.dockerignore`, `compose.yaml` | The web image: the standalone server on `node:26-trixie-slim` (pinned by digest), as a non-root user, with every setting read at request time. `/health/live` is its liveness check. The Compose service is included by the root `compose.yaml` (house-template-base 0.2.3 or later), and with the FastAPI layer it starts the API and calls it inside Compose's network |
+| `frontend/Dockerfile`, `.dockerignore`, `compose.yaml` | The web image: the standalone server on `node:26-trixie-slim` (pinned by digest), as a non-root user, with every setting read at request time. `/health/live` is its liveness check. The Compose service is included by the root `compose.yaml` (house-template-base 0.3.0 or later), and with the FastAPI layer it starts the API and calls it inside Compose's network |
 | `.github/workflows/publish-web.yml` | With `container_images`, every push to main that touches `frontend/` publishes `ghcr.io/<owner>/<project>-web` through base's `publish-image.yml` (provenance and SBOM attested) |
 | `mk/nextjs.mk` | `install-nextjs`, `check-nextjs`, `check-fast-nextjs`, `lock-frontend`, `dev-frontend`, `test-frontend`, `build-frontend`, `e2e-frontend`, `screenshots-frontend`, `image-frontend`, `up-frontend` and `api-types`, joined to the base targets |
 | `.claude/rules/nextjs.md` | Frontend rules for coding agents, loaded only when they touch `frontend/` |
@@ -36,7 +36,7 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 
 With no backend, the proxy, clients and sign-in hook are left out.
 
-Still to come, through reviewed pull requests: the agent setup and releases.
+Still to come: releases.
 
 ## Develop the template
 
