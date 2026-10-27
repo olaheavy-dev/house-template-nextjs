@@ -113,6 +113,49 @@ jobs:
           curl -fs -o /dev/null http://127.0.0.1:3002/
           git status --porcelain && test -z "$(git status --porcelain)"
 
+      # A stand-in collector that is also the backend (tests the openapi proxy without a real API).
+      - name: Traces are exported only when configured, without health checks, and reach the backend
+        working-directory: ${{ runner.temp }}/demo
+        env:
+          BACKEND: ${{ matrix.backend }}
+          SINK: ${{ github.workspace }}/.github/scripts/telemetry_sink.py
+        run: |
+          log="$RUNNER_TEMP/sink.log"
+          touch "$log"
+          python3 "$SINK" 4318 "$log" &
+          wait_for() { for _ in $(seq 60); do curl -fs -o /dev/null "$1" && return; sleep 1; done; return 1; }
+          # Waits for the batch exporter (5 s) to send what it has.
+          exports() { sleep 7; grep -c '^traces$' "$log" || true; }
+          # (server.js changes to its own directory; Next renames the process, so stop it by pid.)
+          serve() {
+            env "$@" PORT=3000 HOSTNAME=127.0.0.1 API_BASE_URL=http://127.0.0.1:4318 \
+              node frontend/.next/standalone/server.js > "$RUNNER_TEMP/web.log" 2>&1 &
+            web=$!
+            wait_for http://127.0.0.1:3000/health/live
+          }
+          stop() { kill "$web"; wait "$web" || true; }
+
+          # No endpoint: nothing is exported, and no trace context goes to the backend.
+          serve OTEL_SERVICE_NAME=web
+          curl -fsS -o /dev/null http://127.0.0.1:3000/
+          if [ "$BACKEND" != none ]; then curl -fsS -o /dev/null http://127.0.0.1:3000/api/v1/me; fi
+          test "$(exports)" = 0
+          if [ "$BACKEND" != none ]; then grep -qx 'api /v1/me -' "$log"; fi
+          stop
+
+          serve OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+          before=$(exports)
+          for _ in 1 2 3; do curl -fsS -o /dev/null http://127.0.0.1:3000/health/live; done
+          test "$(exports)" = "$before"
+          curl -fsS -o /dev/null http://127.0.0.1:3000/
+          if [ "$BACKEND" != none ]; then
+            curl -fsS -o /dev/null http://127.0.0.1:3000/api/v1/me
+            # The proxy's call carries a sampled W3C trace context.
+            grep -Eq '^api /v1/me 00-[0-9a-f]{32}-[0-9a-f]{16}-01$' "$log"
+          fi
+          test "$(exports)" -gt "$before"
+          stop
+
       - name: The image runs as a non-root user and answers its liveness check
         working-directory: ${{ runner.temp }}/demo
         env:

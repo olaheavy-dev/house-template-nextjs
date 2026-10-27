@@ -17,6 +17,7 @@ from conftest import BASE_ANSWERS, TEMPLATE
 def test_layer_renders_the_frontend_and_its_answers(render):
     project = render()
     for path in ("frontend/package.json", "frontend/src/app/page.tsx", "frontend/AGENTS.md",
+                 "frontend/src/instrumentation.ts",
                  "mk/nextjs.mk", ".node-version", ".claude/rules/nextjs.md",
                  ".github/template-owned/nextjs.txt"):
         assert (project / path).is_file(), path
