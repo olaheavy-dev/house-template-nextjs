@@ -119,7 +119,8 @@ jobs:
           BACKEND: ${{ matrix.backend }}
         run: |
           make up-frontend
-          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok"}'
+          # A local build gets no commit; publish-image.yml passes it to published images.
+          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok","commit":null}'
           test "$(docker compose exec -T web id -u)" = 10001
           # The proxy reads API_BASE_URL at request time; unset, it answers 503 (404 with no backend).
           status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)
@@ -215,7 +216,8 @@ jobs:
           API_PORT: "8100" # the step above leaves its API on 8000
         run: |
           make up-frontend
-          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok"}'
+          # A local build gets no commit; publish-image.yml passes it to published images.
+          test "$(curl -fsS http://127.0.0.1:3000/health/live)" = '{"status":"ok","commit":null}'
           curl -fsS -o /dev/null http://127.0.0.1:3000/api/health/live
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/me)" = 401
           test "$(docker compose exec -T web id -u)" = 10001

@@ -17,6 +17,9 @@ RUN npm install --global --no-fund --no-audit "$(node -p 'require("./package.jso
 RUN --mount=type=cache,target=/pnpm/store \
     pnpm install --frozen-lockfile --store-dir /pnpm/store
 COPY . .
+# The commit /health/live reports. Base's publish-image.yml passes it; the route is prerendered,
+# so `next build` is what reads it (a local build without it reports null).
+ARG GIT_COMMIT=""
 # public/ is optional in a Next.js app, but the final stage copies it.
 RUN pnpm build && mkdir -p public
 
