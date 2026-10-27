@@ -330,6 +330,13 @@ def test_the_image_runs_the_standalone_server_as_a_non_root_user(render):
     assert "require(\"./package.json\").packageManager" in dockerfile
 
 
+def test_the_build_gets_the_commit_before_next_build_prerenders_the_health_route(render):
+    # Base's publish-image.yml passes GIT_COMMIT; /health/live is prerendered, so `next build` must see it.
+    dockerfile = (render() / "frontend" / "Dockerfile").read_text()
+    build_stage = dockerfile.split("FROM base AS build")[1].split("\nFROM ")[0]
+    assert build_stage.index('ARG GIT_COMMIT=""') < build_stage.index("RUN pnpm build")
+
+
 def test_secrets_and_local_builds_stay_out_of_the_image(render):
     ignored = (render() / "frontend" / ".dockerignore").read_text().splitlines()
     for entry in [".env", ".env.*", "node_modules/", ".next/"]:
