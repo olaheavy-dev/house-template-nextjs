@@ -36,8 +36,12 @@ The layer reads the project's stacks from `.copier-answers.base.yml` and refuses
 
 With no backend, the proxy, clients and sign-in hook are left out.
 
-Still to come: releases.
-
 ## Develop the template
 
 `uv run pytest` renders the layer and checks it, including the tokens' contrast. CI also generates real projects and runs their `make check` on Node 26: base plus this layer with no backend and with an OpenAPI one, and base plus the FastAPI layer plus this layer, where it also calls the backend through the frontend's proxy in production and development. After a new FastAPI layer release, regenerate the starter API types from it (`make api-types` in a generated project, then copy `frontend/src/lib/api/schema.d.ts` to the fastapi-named file in `template/frontend/src/lib/api/`). After changing `template/frontend/package.json`, regenerate the lockfile with pnpm 12 on Node 26 (`pnpm --dir template/frontend install --lockfile-only`).
+
+`main` is protected by [`.github/rulesets/main.json`](.github/rulesets/main.json): squash merges through pull requests, with the tests, workflow lint (actionlint and zizmor), the PR title check and CodeQL required, and CodeQL and zizmor findings blocking a merge. A test checks that the required checks and the jobs the workflows run on pull requests are the same set.
+
+## Releases
+
+release-please turns Conventional Commit titles into a release PR and, on merge, a `vX.Y.Z` tag. Projects update from those tags.
