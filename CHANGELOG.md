@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/olaheavy-dev/house-template-nextjs/compare/v0.2.0...v0.3.0) (2026-10-27)
+
+
+### Features
+
+* trace the frontend with OpenTelemetry, joined to the backend's traces ([#14](https://github.com/olaheavy-dev/house-template-nextjs/issues/14)) ([fa02b6d](https://github.com/olaheavy-dev/house-template-nextjs/commit/fa02b6d5eff5ef92fe7e4ed535cacb80d209e275))
+
 ## [0.2.0](https://github.com/olaheavy-dev/house-template-nextjs/compare/v0.1.0...v0.2.0) (2026-10-27)
 
 
