@@ -18,7 +18,9 @@ install-nextjs: ## Install the frontend's dependencies (from frontend/pnpm-lock.
 	$(FRONTEND) install --frozen-lockfile
 	$(if $(E2E_DOCKER),,$(FRONTEND) exec playwright install --only-shell chromium)
 
-check-nextjs: ## Frontend: lint, format, types, unit tests, a production build and the end-to-end tests against it
+check-nextjs: ## Frontend: peer dependencies, lint, format, types, unit tests, a production build and the end-to-end tests against it
+	# Fails when an update leaves a package outside its peers' ranges (the OpenTelemetry set moves together).
+	$(FRONTEND) peers check
 	$(FRONTEND) lint
 	$(FRONTEND) format:check
 	$(FRONTEND) typecheck
