@@ -19,7 +19,7 @@ type Env = Record<string, string | undefined>;
 // The liveness check (/health/live) and the backend's checks through the proxy (/api/health/*).
 const HEALTH_CHECK = /^\/(api\/)?health\//;
 
-/** Drops traces that start at a health check; everything else goes to `next`. */
+/** Drops health check requests, whatever the caller decided; everything else goes to `next`. */
 export class SkipHealthChecks implements Sampler {
   constructor(private readonly next: Sampler) {}
 
@@ -40,9 +40,11 @@ export function telemetryConfig(env: Env): Configuration {
   const backend = env.API_BASE_URL?.replace(/\/*$/, "/");
   return {
     serviceName: env.OTEL_SERVICE_NAME || "web",
-    // Every trace is kept, as the backend keeps them; a span whose caller sampled follows its
-    // caller. To keep a fraction, put a TraceIdRatioBasedSampler inside SkipHealthChecks.
-    traceSampler: new ParentBasedSampler({ root: new SkipHealthChecks(new AlwaysOnSampler()) }),
+    // Every trace is kept, as the backend keeps them, and a span whose caller sampled follows its
+    // caller; to keep a fraction, use a TraceIdRatioBasedSampler as the root. The health check
+    // filter goes outside: a parent-based sampler never asks its root when the caller (a probe
+    // from an instrumented load balancer, say) sent a sampled traceparent.
+    traceSampler: new SkipHealthChecks(new ParentBasedSampler({ root: new AlwaysOnSampler() })),
     // traceparent goes to the backend only, never to other hosts the server fetches from.
     instrumentationConfig: { fetch: { propagateContextUrls: backend ? [backend] : [] } },
   };

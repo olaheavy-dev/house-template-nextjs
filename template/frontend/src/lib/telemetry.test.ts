@@ -1,11 +1,15 @@
 // @vitest-environment node
-import { ROOT_CONTEXT, SpanKind } from "@opentelemetry/api";
+import { type Context, ROOT_CONTEXT, SpanKind, TraceFlags, trace } from "@opentelemetry/api";
 import { AlwaysOnSampler, SamplingDecision } from "@opentelemetry/sdk-trace-base";
 import { SkipHealthChecks, telemetryConfig } from "./telemetry";
 
-function decide(sampler: { shouldSample: SkipHealthChecks["shouldSample"] }, target: string) {
+function decide(
+  sampler: { shouldSample: SkipHealthChecks["shouldSample"] },
+  target: string,
+  context: Context = ROOT_CONTEXT,
+) {
   return sampler.shouldSample(
-    ROOT_CONTEXT,
+    context,
     "0af7651916cd43dd8448eb211c80319c",
     "GET",
     SpanKind.SERVER,
@@ -25,6 +29,19 @@ describe("telemetry", () => {
     expect(decide(new SkipHealthChecks(new AlwaysOnSampler()), "/health/live")).toBe(
       SamplingDecision.NOT_RECORD,
     );
+  });
+
+  it("leaves out health checks whose caller sampled them", () => {
+    // A probe from an instrumented load balancer or monitor arrives with a sampled traceparent.
+    const sampledCaller = trace.setSpanContext(ROOT_CONTEXT, {
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      spanId: "00f067aa0ba902b7",
+      traceFlags: TraceFlags.SAMPLED,
+      isRemote: true,
+    });
+    const sampler = telemetryConfig({}).traceSampler as SkipHealthChecks;
+    expect(decide(sampler, "/health/live", sampledCaller)).toBe(SamplingDecision.NOT_RECORD);
+    expect(decide(sampler, "/api/v1/me", sampledCaller)).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("sends the trace context to the backend and nowhere else", () => {

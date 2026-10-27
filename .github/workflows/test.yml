@@ -145,7 +145,12 @@ jobs:
 
           serve OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
           before=$(exports)
-          for _ in 1 2 3; do curl -fsS -o /dev/null http://127.0.0.1:3000/health/live; done
+          # Also when the probe sends a sampled traceparent, as an instrumented load balancer does.
+          sampled=traceparent:00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+          for _ in 1 2 3; do
+            curl -fsS -o /dev/null http://127.0.0.1:3000/health/live
+            curl -fsS -o /dev/null -H "$sampled" http://127.0.0.1:3000/health/live
+          done
           test "$(exports)" = "$before"
           curl -fsS -o /dev/null http://127.0.0.1:3000/
           if [ "$BACKEND" != none ]; then
