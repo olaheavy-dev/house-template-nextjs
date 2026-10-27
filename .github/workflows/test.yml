@@ -14,7 +14,7 @@ concurrency:
 env:
   # The base layer the generated project starts from. Keep tests/conftest.py's BASE_ANSWERS in step
   # (a test checks it) when moving to a newer house-template-base release.
-  BASE_VERSION: v0.3.0
+  BASE_VERSION: v0.4.0
   # The FastAPI layer the full-stack job adds. The committed API types are generated from it, so
   # moving to a newer release may need `make api-types` and a commit of the result.
   FASTAPI_VERSION: v0.6.0
