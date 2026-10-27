@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/olaheavy-dev/house-template-nextjs/compare/v0.1.0...v0.2.0) (2026-10-27)
+
+
+### Features
+
+* the web image reports the commit it was built from on /health/live ([#11](https://github.com/olaheavy-dev/house-template-nextjs/issues/11)) ([35734ad](https://github.com/olaheavy-dev/house-template-nextjs/commit/35734ad4aa1e22f7a74950cfaa4290b7078af908))
+
 ## 0.1.0 (2026-10-27)
 
 
